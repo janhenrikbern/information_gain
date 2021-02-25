@@ -8,3 +8,9 @@ for filename in glob.glob("*.py"):
   with fileinput.FileInput(filename, inplace=True, backup='.bak') as file:
       for line in file:
           print(line.replace(v1_import_statement, v2_import_statement), end='')
+
+initial = "int(multiprocessing.cpu_count() / 4))"
+final = "max(int(multiprocessing.cpu_count() / 4), 1))"
+with fileinput.FileInput("dataReader.py", inplace=True, backup='.bak') as file:
+    for line in file:
+        print(line.replace(initial, final), end='')
