@@ -17,5 +17,5 @@ def run(ground_truth_path, gt_out_dir="/content/gt/", permutations_out_dir="/con
 
 
 if __name__ == "__main__":
-    for img in glob.glob("/content/gt/*.png")
+    for img in glob.glob("/content/gt/*.png"):
         run(img)
