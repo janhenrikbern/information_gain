@@ -8,9 +8,6 @@ import time
 DEBUG = False
 IMG_CNT = 1
 
-
-
-
 def get_combinations(n, img_cnt, unfiltered=False):
     combos = combinations(range(n), img_cnt)
     out = []

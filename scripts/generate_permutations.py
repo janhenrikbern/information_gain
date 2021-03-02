@@ -1,11 +1,12 @@
 from PIL import Image
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from image_stitcher import segment, stitch
+import glob, os
 
 def run(ground_truth_path, gt_out_dir="/content/gt/", permutations_out_dir="/content/permutations/"):
-    im = Image.open(ground_truth_path)
-    im = np.array(im)
+    im = cv2.imread(ground_truth_path)
     data = segment(im)
 
     stitch(data["X"], permutations_out_dir, name=None, targets=4, use_combinations=True, img_cnt=5)    
@@ -17,5 +18,5 @@ def run(ground_truth_path, gt_out_dir="/content/gt/", permutations_out_dir="/con
 
 
 if __name__ == "__main__":
-    for img in glob.glob("/content/gt/*.png"):
+    for img in glob.glob("/content/base/*.png"):
         run(img)
