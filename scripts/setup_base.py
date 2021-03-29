@@ -6,4 +6,5 @@ import generate_permutations
 
 os.mkdir("/content/gt")
 os.mkdir("/content/permutations")
+os.mkdir("/content/permutations/test")
 os.mkdir("/content/base")
