@@ -9,6 +9,7 @@ DEBUG = False
 IMG_CNT = 1
 
 def get_combinations(n, img_cnt, unfiltered=False):
+
     combos = combinations(range(n), img_cnt)
     out = []
     last = set()
@@ -25,21 +26,27 @@ def stitch(imgs, out_dir, name=None, targets=4, use_combinations=False, img_cnt=
         return
 
     combos = [range(img_cnt)]
-    if use_combinations:
-        combos = get_combinations(len(imgs), img_cnt)
-        if DEBUG:
-            print(combos)
+    # if use_combinations:
+    #     combos = get_combinations(len(imgs), img_cnt, unfiltered=True)
+    #     if DEBUG:
+    #         print(combos)
+    combos = combinations(range(len(imgs)), img_cnt) 
 
     h, w, c = imgs[0].shape
     cnt = name if name else int(round(time.time() * 1000))
+    # os.mkdir(out_dir+name)
     for k, combo in enumerate(combos):
+        comboname = ""
+        for i in combo:
+            comboname += (str(i) + "-")
+        comboname = comboname[:-1]
         out = np.full((h, w * (img_cnt + targets), c), (0, 0, 0), dtype=np.uint8)
 
         for i, idx in enumerate(combo):
             out[0:h, i * w : (i + 1) * w] = imgs[idx]
 
         cv2.imwrite(
-            os.path.join(out_dir, f"{cnt}_{k+1}.png"),
+            os.path.join(out_dir, f"{cnt}_{comboname}.png"),
             out,
         )
 
