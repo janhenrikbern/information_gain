@@ -10,6 +10,8 @@ from pytorch_ssim import ssim
 import numpy as np
 import matplotlib.pyplot as plt
 
+# Global variables that can be changed to organize directory structure. 
+# Important to have test directory in permutations for placing the view combinations
 GLOBAL_DIR = "/Users/abhinav/Research/infogain"
 GT_DIR = GLOBAL_DIR + "/gt"
 PERMUTATIONS_DIR = GLOBAL_DIR + "/permutations"
@@ -18,10 +20,16 @@ BASE_DIR = GLOBAL_DIR + "/base"
 GLOBAL_IMG_NUMBER = 3
 
 def clone_repo(url, dir):
+  '''
+  Simple helper to clone repos easily
+  '''
   Repo.clone_from(url,dir)
 
 
 def imports(dir):
+  '''
+  Imports necessary repos (pytorch-ssim) and SVBRDF acquisition (deschaintre)
+  '''
   if not os.path.exists(dir+"/multi-image-deepNet-SVBRDF-acquisition"):
     clone_repo("https://github.com/valentin-deschaintre/multi-image-deepNet-SVBRDF-acquisition.git", dir+"/multi-image-deepNet-SVBRDF-acquisition")
   if not os.path.exists(dir+"/pytorch-ssim"):
@@ -29,6 +37,10 @@ def imports(dir):
   # wget.download("https://repo-sam.inria.fr/fungraph/multi_image_materials/supplemental_multi_images/checkpointTrained.zip", bar=bar_thermometer)
 
 def make_dirs():
+  '''
+  Helper function to make directories of associated ground truth values, 
+  permutations of view combinations, and a base directory to store test images
+  '''
   if not os.path.exists(GT_DIR):
     os.mkdir(GT_DIR)
   if not os.path.exists(PERMUTATIONS_DIR):
@@ -39,6 +51,15 @@ def make_dirs():
     os.mkdir(BASE_DIR)
 
 def assemble_targets():
+  '''
+  Correctly organizes the ground truth SVBRDF maps for each material
+    Parameters:
+      none
+
+    Returns:
+      target_paths: array of all the target SVBRDF ground truth values for each material
+  '''
+
   target_endings = [
       "target-0.png",
       "target-1.png",
@@ -51,6 +72,18 @@ def assemble_targets():
   return target_paths
 
 def load_data(target_paths):
+  '''
+  Loads SVBRDF predictions into output and associated naming conventions for 
+  tracking of the different view combinations
+    Parameters:
+      target_paths: array of all the target ground truth SVBRDF maps for each material 
+      (used to help with naming conventions for view combinations)
+
+    Returns:
+      out: output array of SVBRDF predictions for each material's view combinations
+      code: output array of associated names for the SVBRDF maps of each material's view combinations
+  '''
+
   out=[]
   code=[]
   num_targets = 3*GLOBAL_IMG_NUMBER
@@ -90,10 +123,32 @@ def load_data(target_paths):
   return out, code
 
 def load_tensor(path):
+  '''
+  Helper function to load tensor for ground truth and predicted SVBRDF maps
+    Parameters:
+      path: filepath of SVBRDF maps for each material ( ground truth and predicted)
+      
+
+    Returns:
+      none, but saves SSIM graphs and view combination images along with predicted 
+      SVBRDF maps for each view combination
+  '''
+
   im = Image.open(path)
   return transforms.functional.to_tensor(im).cuda()
 
+
 def graph(code, target_paths, out):
+  '''
+  Uses pytorch SSIM library to graph SSIM score for each view combination to compare.
+    Parameters:
+      code: array of names for each view combination for each material
+      target_paths: array of expected ground truth SVBRDF maps
+      out: outputted SVBRDF maps of each of the view combinations for comparison with targets
+
+    Returns:
+      saves graphs of SSIM for each view combination
+  '''
   count = 0
   for j in out:
     lbl = target_paths[count]
@@ -119,13 +174,15 @@ def graph(code, target_paths, out):
 
 def run():
   '''
-  Returns the sum of two decimal numbers in binary digits.
+  Uses other scripts (generate_permutations and setup_deschaintre) to create 
+  view combinations and runs full grid search and graphs SSIM scores for every 
+  view combination.
     Parameters:
-      a (int): A decimal integer
-      b (int): Another decimal integer
+      
 
     Returns:
-      binary_sum (str): Binary string of the sum of a and b
+      none, but saves SSIM graphs and view combination images along with predicted 
+      SVBRDF maps for each view combination
   '''
   imports(GLOBAL_DIR)
 
