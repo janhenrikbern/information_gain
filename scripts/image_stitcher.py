@@ -8,6 +8,7 @@ import time
 DEBUG = False
 IMG_CNT = 1
 
+
 def get_combinations(n, img_cnt, unfiltered=False):
 
     combos = combinations(range(n), img_cnt)
@@ -15,13 +16,15 @@ def get_combinations(n, img_cnt, unfiltered=False):
     last = set()
     for c in combos:
         cur = set(c)
-        if len(last.intersection(cur)) <= round(img_cnt/2.):
+        if len(last.intersection(cur)) <= round(img_cnt / 2.0):
             out.append(c)
             last = cur
     return list(combos) if unfiltered else out
 
 
-def stitch(imgs, out_dir, name=None, targets=4, use_combinations=False, img_cnt=IMG_CNT):
+def stitch(
+    imgs, out_dir, name=None, targets=4, use_combinations=False, img_cnt=IMG_CNT
+):
     if len(imgs) < img_cnt:
         return
 
@@ -30,7 +33,7 @@ def stitch(imgs, out_dir, name=None, targets=4, use_combinations=False, img_cnt=
     #     combos = get_combinations(len(imgs), img_cnt, unfiltered=True)
     #     if DEBUG:
     #         print(combos)
-    combos = combinations(range(len(imgs)), img_cnt) 
+    combos = combinations(range(len(imgs)), img_cnt)
 
     h, w, c = imgs[0].shape
     cnt = name if name else int(round(time.time() * 1000))
@@ -38,7 +41,7 @@ def stitch(imgs, out_dir, name=None, targets=4, use_combinations=False, img_cnt=
     for k, combo in enumerate(combos):
         comboname = ""
         for i in combo:
-            comboname += (str(i) + "-")
+            comboname += str(i) + "-"
         comboname = comboname[:-1]
         out = np.full((h, w * (img_cnt + targets), c), (0, 0, 0), dtype=np.uint8)
 
@@ -50,6 +53,7 @@ def stitch(imgs, out_dir, name=None, targets=4, use_combinations=False, img_cnt=
             out,
         )
 
+
 def segment(img, truth_cnt=4, img_size=256):
     out = []
     h, w, c = img.shape
@@ -59,7 +63,6 @@ def segment(img, truth_cnt=4, img_size=256):
         out.append(img[:, offset : offset + img_size, :])
 
     return {"X": out[:-truth_cnt], "y": out[-truth_cnt:]}
-
 
 
 def main(in_path, out_path, n_targets, use_combos, n_picks):
@@ -85,19 +88,21 @@ def main(in_path, out_path, n_targets, use_combos, n_picks):
         if a.parse_folder:
             for ix, img in enumerate(imgs):
                 stitch(
-                    [img], out_path, 
-                    name=f"{sample}_{ix}", 
-                    targets=n_targets, 
+                    [img],
+                    out_path,
+                    name=f"{sample}_{ix}",
+                    targets=n_targets,
                     use_combinations=use_combos,
-                    img_cnt=n_picks
+                    img_cnt=n_picks,
                 )
         else:
             stitch(
-                imgs, out_path, 
-                name=f"{sample}_{cnt}", 
-                targets=n_targets, 
+                imgs,
+                out_path,
+                name=f"{sample}_{cnt}",
+                targets=n_targets,
                 use_combinations=use_combos,
-                img_cnt=n_picks
+                img_cnt=n_picks,
             )
 
 
@@ -106,7 +111,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input_dir", required=True, help="path to folder containing images"
     )
-    parser.add_argument("--output_dir", required=True, help="Output directory of raw images")
+    parser.add_argument(
+        "--output_dir", required=True, help="Output directory of raw images"
+    )
     parser.add_argument(
         "--n_targets", default=4, help="Number of target blanks", type=int
     )
