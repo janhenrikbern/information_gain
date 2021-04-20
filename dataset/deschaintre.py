@@ -8,9 +8,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from pytorch_svbrdf_renderer import Renderer, Config
-# import environment as env
-# import renderers
+from pytorch_svbrdf_renderer import Renderer, Config, load_svbrdf_maps
 import torch
 import utils
 
@@ -147,18 +145,14 @@ class SvbrdfDataset(torch.utils.data.Dataset):
 
     def read_sample(self, file_path):
         # Read full image
-        # TODO: Use utils.read_image_tensor()
-        full_image = torch.Tensor(plt.imread(file_path)).permute(2, 0, 1)
+        image = load_svbrdf_maps([file_path])
+
+        # 4 is the number of maps in the SVBRDF
+        svbrdf_map_count = 0 if self.no_svbrdf else 4
 
         # Split the full image apart along the horizontal direction
-        # Magick number 4 is the number of maps in the SVBRDF
-        svbrdf_map_count = 0 if self.no_svbrdf else 4
-        image_parts = torch.cat(
-            full_image.unsqueeze(0).chunk(
-                self.input_image_count + svbrdf_map_count, dim=-1
-            ),
-            0,
-        )  # [n, 3, 256, 256]
+        # image_parts.shape = (4 + n_input_images, channels, height, width)
+        image_parts = torch.cat(image.chunk(self.input_image_count + svbrdf_map_count, dim=-1), dim=0)
 
         # Read the SVBRDF (dummy if there is none in the dataset)
         svbrdf = None
@@ -226,6 +220,7 @@ class SvbrdfDataset(torch.utils.data.Dataset):
         )
 
     def render_inputs(self, svbrdf, count):
+        print(">>> Rendering inputs")
         # Constants as defined in the reference code
         min_eps = 0.001  # Reference: "allows near 90     degrees angles"
         max_eps = 0.02  # Reference: "removes all angles below 8.13 degrees."
@@ -251,7 +246,7 @@ class SvbrdfDataset(torch.utils.data.Dataset):
             )
             light_poses = torch.cat([light_poses, light_poses_hemisphere], dim=0)
 
-        light_colors = torch.Tensor([30.0]).unsqueeze(-1)
+        light_colors = torch.Tensor([40.0]).unsqueeze(-1)
         if self.use_augmentation:
             # Reference: "add a normal distribution to the stddev so that sometimes in a minibatch all the images are consistant and sometimes crazy".
             # NOTE: For us, this effect will not be batch-wide but only for this individual sample.
@@ -290,25 +285,23 @@ class SvbrdfDataset(torch.utils.data.Dataset):
             ) * view_distance[1:].unsqueeze(-1)
             view_poses = torch.cat([view_poses, view_poses_hemisphere], dim=0)
 
-        renderer = Renderer()
-        renderings = []
-        for i in range(count):
-            # TODO: Add spotlight support to the renderer (currentConeTargetPos in the reference code)
-            scene = env.Scene(
-                env.Camera(view_poses[i]), env.Light(light_poses[i], light_colors[i])
-            )
+        R = Renderer()
+        # TODO: Add spotlight support to the renderer (currentConeTargetPos in the reference code)
+        C = Config()
+        C.light_position(light_poses)
+        C.view_position(view_poses)
+        C.light_color_intensity(30.0)
 
-            rendering = renderer.render(scene, svbrdf.unsqueeze(0))
+        R.set_config(C) # add decoder to renderer
+        rendering = R.run(svbrdf.unsqueeze(0), stacked_channels=True)
 
-            # Simulate noise
-            std_deviation_noise = torch.exp(
-                torch.Tensor(1).normal_(mean=np.log(0.005), std=0.3)
-            ).numpy()[0]
-            noise = torch.zeros_like(rendering).normal_(
-                mean=0.0, std=std_deviation_noise
-            )
-            rendering = torch.clamp(rendering + noise, min=0.0, max=1.0)
+        # Simulate noise
+        std_deviation_noise = torch.exp(
+            torch.Tensor(1).normal_(mean=np.log(0.005), std=0.3)
+        ).numpy()[0]
+        noise = torch.zeros_like(rendering).normal_(
+            mean=0.0, std=std_deviation_noise
+        )
+        rendering = torch.clamp(rendering + noise, min=0.0, max=1.0)
 
-            renderings.append(rendering)
-
-        return torch.cat(renderings, dim=0)
+        return rendering.squeeze(0).permute(0, 3, 1, 2)
