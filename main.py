@@ -1,41 +1,23 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
+from torch.utils.tensorboard import SummaryWriter
 from accelerate import Accelerator
 
 from dataset.deschaintre import SvbrdfDataset
-from models import SingleViewModel, MultiViewModel
-from losses import SVBRDFL1Loss
+from models import MultiViewModel
+from losses import MixedLoss
 
 import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", "-d", required=False, type=str, default="./data/train", help="")
+parser.add_argument("--log_dir", "-ld", required=False, type=str, default="./runs/", help="")
 parser.add_argument("--batch_size", "-b", required=False, type=int, default=1, help="")
 parser.add_argument("--epochs", "-e", required=False, type=int, default=1, help="")
 parser.add_argument("--learning_rate", "-lr", required=False, type=float, default=1e-5, help="")
+parser.add_argument("--mix_materials", "--mix", required=False, type=bool, default=False, help="")
 
 args = parser.parse_args()
-
-
-def plot_imgs(name, imgs, n_rows, n_cols, row_major=True, permute=False):
-        fig = plt.figure(figsize=(n_cols, n_rows))
-        grid = fig.add_gridspec(n_rows, n_cols)
-        for i in range(n_rows):
-            for j in range(n_cols):
-
-                if row_major:
-                    img = imgs[i, j]
-                else:
-                    img = imgs[j, i]
-                if permute:
-                    img = img.permute(1,2,0)
-                
-                fig.add_subplot(grid[i, j])
-                plt.axis("off")
-                plt.imshow(img)
-
-        plt.savefig(f"{name}.png", dpi=300, bbox_inches="tight")
 
 if __name__ == "__main__":
     N_VIEWS = 3
@@ -49,14 +31,14 @@ if __name__ == "__main__":
     epochs = args.epochs
     lr = args.learning_rate
     batch_size = args.batch_size
-    # device = 'cuda' if torch.cuda.is_available() else 'cpu' 
+
+    writer = SummaryWriter(log_dir=args.log_dir)
 
     accelerator = Accelerator()
     device = accelerator.device
-    # device = 'cpu' if torch.cuda.is_available() else 'cpu' 
 
-    dt = SvbrdfDataset(data_dir, 256, "crop", 0, 4, True, mix_materials=False, random_crop=True)
-    trainset = torch.utils.data.DataLoader(dt, batch_size=batch_size, pin_memory=False, shuffle=True)
+    dt = SvbrdfDataset(data_dir, 256, "crop", 0, 10, True, mix_materials=args.mix_materials, random_crop=True)
+    trainset = torch.utils.data.DataLoader(dt, batch_size=batch_size, pin_memory=True, shuffle=True)
 
     # Check training set 
     # for batch_num, batch in enumerate(trainset):
@@ -70,7 +52,7 @@ if __name__ == "__main__":
 
 
     model = MultiViewModel().to(device)
-    criterion = SVBRDFL1Loss()
+    criterion = MixedLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     model, optim, data = accelerator.prepare(model, optimizer, trainset)
@@ -87,6 +69,7 @@ if __name__ == "__main__":
             optimizer.zero_grad() 
             outputs = model(batch_inputs)
             loss = criterion(outputs, batch_svbrdf)
+            writer.add_scalar("Loss/train", loss.item(), epoch)
             accelerator.backward(loss)
             # loss.backward()
             optimizer.step()
@@ -119,3 +102,5 @@ if __name__ == "__main__":
         #     writer.add_scalar("val_loss", val_loss, epoch * batch_count)
         
         #     model.train()
+    writer.flush()
+    writer.close()
