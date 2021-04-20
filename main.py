@@ -12,7 +12,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", "-d", required=False, type=str, default="./data/train", help="")
 parser.add_argument("--batch_size", "-b", required=False, type=int, default=1, help="")
 parser.add_argument("--epochs", "-e", required=False, type=int, default=1, help="")
-parser.add_argument("--epochs", "-e", required=False, type=int, default=1, help="")
 parser.add_argument("--learning_rate", "-lr", required=False, type=float, default=1e-5, help="")
 
 args = parser.parse_args()
