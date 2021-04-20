@@ -4,8 +4,6 @@ CODE from https://github.com/mworchel/svbrdf-estimation
 ADD CREDITS / REFERENCE BEFORE CODE RELEASE!!!
 """
 
-import environment as env
-import renderers
 import torch
 import torch.nn as nn
 import utils
