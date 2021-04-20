@@ -52,6 +52,7 @@ if __name__ == "__main__":
     # device = 'cuda' if torch.cuda.is_available() else 'cpu' 
 
     accelerator = Accelerator()
+    device = accelerator.device
     # device = 'cpu' if torch.cuda.is_available() else 'cpu' 
 
     dt = SvbrdfDataset(data_dir, 256, "crop", 0, 4, True, mix_materials=False, random_crop=True)
@@ -68,7 +69,7 @@ if __name__ == "__main__":
         # plot_imgs(str(batch_num), svbrdf_maps.unsqueeze(0), 1, 4, permute=True)
 
 
-    model = MultiViewModel()
+    model = MultiViewModel().to(device)
     criterion = SVBRDFL1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
@@ -80,8 +81,8 @@ if __name__ == "__main__":
             # Unique index of this batch
             batch_index = epoch * 1 + i
             # batch_index = epoch * batch_count + i
-            batch_inputs = batch["inputs"]#.to(device)
-            batch_svbrdf = batch["svbrdf"]#.to(device)
+            batch_inputs = batch["inputs"].to(device)
+            batch_svbrdf = batch["svbrdf"].to(device)
 
             optimizer.zero_grad() 
             outputs = model(batch_inputs)
