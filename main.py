@@ -6,6 +6,18 @@ from dataset.deschaintre import SvbrdfDataset
 from models import SingleViewModel, MultiViewModel
 from losses import SVBRDFL1Loss
 
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--data_dir", "-d", required=False, type=str, default="./data/train", help="")
+parser.add_argument("--batch_size", "-b", required=False, type=int, default=1, help="")
+parser.add_argument("--epochs", "-e", required=False, type=int, default=1, help="")
+parser.add_argument("--epochs", "-e", required=False, type=int, default=1, help="")
+parser.add_argument("--learning_rate", "-lr", required=False, type=float, default=1e-5, help="")
+
+args = parser.parse_args()
+
+
 def plot_imgs(name, imgs, n_rows, n_cols, row_major=True, permute=False):
         fig = plt.figure(figsize=(n_cols, n_rows))
         grid = fig.add_gridspec(n_rows, n_cols)
@@ -31,13 +43,17 @@ if __name__ == "__main__":
     UPDATE_METHOD = 0
     OFFSET_DIST = torch.Tensor([0.1, 0.1, 0])
     epoch_start = 0
-    epochs = 3
-    lr = 1e-5
+
+    data_dir = args.data_dir
+
+    epochs = args.epochs
+    lr = args.learning_rate
+    batch_size = args.batch_size
     # device = 'cuda' if torch.cuda.is_available() else 'cpu' 
     device = 'cpu' if torch.cuda.is_available() else 'cpu' 
 
-    dt = SvbrdfDataset("./data/train/", 256, "crop", 0, 4, True, mix_materials=False, random_crop=True)
-    trainset = torch.utils.data.DataLoader(dt, batch_size=1, pin_memory=False, shuffle=True)
+    dt = SvbrdfDataset(data_dir, 256, "crop", 0, 4, True, mix_materials=False, random_crop=True)
+    trainset = torch.utils.data.DataLoader(dt, batch_size=batch_size, pin_memory=False, shuffle=True)
 
     # Check training set 
     # for batch_num, batch in enumerate(trainset):
