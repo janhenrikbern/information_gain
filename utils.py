@@ -10,6 +10,28 @@ import numpy as np
 from PIL import Image
 import random
 import torch
+import matplotlib.pyplot as plt
+
+
+def plot_imgs(name, imgs, n_rows, n_cols, row_major=True, permute=False):
+        fig = plt.figure(figsize=(n_cols, n_rows))
+        grid = fig.add_gridspec(n_rows, n_cols)
+        for i in range(n_rows):
+            for j in range(n_cols):
+
+                if row_major:
+                    img = imgs[i, j]
+                else:
+                    img = imgs[j, i]
+                if permute:
+                    img = img.permute(1,2,0)
+                
+                fig.add_subplot(grid[i, j])
+                plt.axis("off")
+                plt.imshow(img)
+
+        plt.savefig(f"{name}.png", dpi=300, bbox_inches="tight")
+
 
 
 def enable_deterministic_random_engine(seed=313):
@@ -138,165 +160,30 @@ def generate_normalized_random_direction(count, min_eps=0.001, max_eps=0.05):
 
     return torch.cat([x, y, z], axis=-1)
 
-
-def read_image(path):
-    image = Image.open(path)
-    mode = image.mode
-
-    if mode != "RGB" and mode != "RGBA":
-        raise ValueError(
-            "Path '{:s}' does not point to a valid RGB or RGBA image file.".format(path)
-        )
-
-    image = np.float32(image) / 255.0
-
-    # Convert RGBA to RGB
-    if mode == "RGBA":
-        image = image[:, :, :3]
-
-    return image
+def generate_random_scenes(count):
+    # Randomly distribute both, view and light positions
+    view_positions  = generate_normalized_random_direction(count, 0.001, 0.1) # shape = [count, 3]
+    light_positions = generate_normalized_random_direction(count, 0.001, 0.1)
+    light_intensity = torch.ones_like(light_positions) * 20.
+    return view_positions, light_positions, light_intensity
 
 
-def read_image_tensor(path):
-    return torch.Tensor(read_image(path)).permute(2, 0, 1)
+def generate_specular_scenes(count):
+    # Only randomly distribute view positions and place lights in a perfect mirror configuration
+    view_positions  = generate_normalized_random_direction(count, 0.001, 0.1) # shape = [count, 3]
+    light_positions = view_positions * torch.Tensor([-1.0, -1.0, 1.0]).unsqueeze(0)
 
+    # Reference: "parameters chosen empirically to have a nice distance from a -1;1 surface.""
+    distance_view  = torch.exp(torch.Tensor(count, 1).normal_(mean=0.5, std=0.75)) 
+    distance_light = torch.exp(torch.Tensor(count, 1).normal_(mean=0.5, std=0.75))
 
-def write_image(path, image):
-    Image.fromarray(np.uint8(np.clip(image, 0.0, 1.0) * 255.0)).save(path)
+    # Reference: "Shift position to have highlight elsewhere than in the center."
+    # NOTE: This code only creates guaranteed specular highlights in the orthographic rendering, not in the perspective one.
+    #       This is because the camera is -looking- at the center of the patch.
+    shift = torch.cat([torch.Tensor(count, 2).uniform_(-1.0, 1.0), torch.zeros((count, 1)) + 0.0001], dim=-1)
 
+    view_positions  = view_positions  * distance_view  + shift
+    light_positions = light_positions * distance_light + shift
+    light_intensity = torch.ones_like(light_positions) * 50.
 
-def write_image_tensor(path, tensor):
-    original_shape = tensor.shape
-    old_shape = tensor.shape
-    while len(old_shape) > 3:
-        tensor = tensor.squeeze(0)
-        new_shape = tensor.shape
-        if len(old_shape) == len(new_shape):
-            # We were not able to squeeze the tensor any further to 3 dimensions.
-            raise RuntimeError(
-                "Unable to squeeze tensor of shape {} into 3 dimensions.".format(
-                    original_shape
-                )
-            )
-        old_shape = new_shape
-
-    tensor = (
-        tensor.cpu().detach().permute(1, 2, 0)
-    )  # Shuffle from [c, h, w] to [h, w, c]
-
-    write_image(path, tensor.numpy())
-
-
-if __name__ == "__main__":
-    import math
-    import unittest
-
-    class TestGammaFunctions(unittest.TestCase):
-        def setUp(self):
-            magic_pixel = 1.3703509847201
-            self.encoded_image = [[[magic_pixel]], [[magic_pixel]]]
-            self.decoded_image = [[[2.0]], [[2.0]]]
-
-        def test_decode_single(self):
-            img = gamma_decode(torch.Tensor(self.encoded_image))
-            torch.testing.assert_allclose(img, self.decoded_image)
-
-        def test_decode_batch(self):
-            img = gamma_decode(
-                torch.Tensor(self.encoded_image).unsqueeze(0).repeat([5, 1, 1, 1])
-            )
-            torch.testing.assert_allclose(img, self.decoded_image)
-
-        def test_encode_single(self):
-            img = gamma_encode(torch.Tensor(self.decoded_image))
-            torch.testing.assert_allclose(img, self.encoded_image)
-
-        def test_encode_batch(self):
-            img = gamma_encode(
-                torch.Tensor(self.decoded_image).unsqueeze(0).repeat([5, 1, 1, 1])
-            )
-            torch.testing.assert_allclose(img, self.encoded_image)
-
-    class TestSvbrdfPacking(unittest.TestCase):
-        def setUp(self):
-            normal_norm = math.sqrt(3.0)
-            normal_xyz = 1.0 / normal_norm
-            self.normals = torch.Tensor(
-                [[[normal_xyz]], [[normal_xyz]], [[normal_xyz]]]
-            )
-            self.diffuse = torch.Tensor([[[0.1]], [[0.2]], [[0.3]]])
-            self.roughness = torch.Tensor([[[0.3]], [[0.3]], [[0.3]]])
-            self.specular = torch.Tensor([[[0.4]], [[0.5]], [[0.6]]])
-
-            self.batch_size = 5
-
-        def test_pack_single(self):
-            svbrdf = pack_svbrdf(
-                self.normals, self.diffuse, self.roughness, self.specular
-            )
-            shape = svbrdf.shape
-            self.assertEqual(shape[0], 12)  # Channels
-            self.assertEqual(shape[1], 1)  # Height
-            self.assertEqual(shape[2], 1)  # Width
-            torch.testing.assert_allclose(svbrdf[0:3], self.normals)
-            torch.testing.assert_allclose(svbrdf[3:6], self.diffuse)
-            torch.testing.assert_allclose(svbrdf[6:9], self.roughness)
-            torch.testing.assert_allclose(svbrdf[9:12], self.specular)
-
-        def test_pack_single_encoded(self):
-            # TODO: Implement
-            self.assertEqual(1, 1)
-
-        def test_pack_batch(self):
-            svbrdfs = pack_svbrdf(
-                self.normals, self.diffuse, self.roughness, self.specular
-            ).repeat([self.batch_size, 1, 1, 1])
-            shape = svbrdfs.shape
-            self.assertEqual(shape[0], self.batch_size)  # Batch
-            self.assertEqual(shape[1], 12)  # Channels
-            self.assertEqual(shape[2], 1)  # Height
-            self.assertEqual(shape[3], 1)  # Width
-            torch.testing.assert_allclose(svbrdfs[:, 0:3], self.normals)
-            torch.testing.assert_allclose(svbrdfs[:, 3:6], self.diffuse)
-            torch.testing.assert_allclose(svbrdfs[:, 6:9], self.roughness)
-            torch.testing.assert_allclose(svbrdfs[:, 9:12], self.specular)
-
-        def test_pack_batch_encoded(self):
-            # TODO: Implement
-            self.assertEqual(1, 1)
-
-        def test_unpack_single(self):
-            svbrdf = pack_svbrdf(
-                self.normals, self.diffuse, self.roughness, self.specular
-            )
-            normals, diffuse, roughness, specular = unpack_svbrdf(svbrdf)
-            torch.testing.assert_allclose(normals, self.normals)
-            torch.testing.assert_allclose(diffuse, self.diffuse)
-            torch.testing.assert_allclose(roughness, self.roughness)
-            torch.testing.assert_allclose(specular, self.specular)
-
-        def test_unpack_single_encoded(self):
-            # TODO: Implement
-            self.assertEqual(1, 1)
-
-        def test_unpack_batch(self):
-            svbrdf = pack_svbrdf(
-                self.normals, self.diffuse, self.roughness, self.specular
-            ).repeat([self.batch_size, 1, 1, 1])
-            normals, diffuse, roughness, specular = unpack_svbrdf(svbrdf)
-            self.assertEqual(diffuse.shape[0], self.batch_size)
-            self.assertEqual(diffuse.shape[0], self.batch_size)
-            self.assertEqual(diffuse.shape[0], self.batch_size)
-            self.assertEqual(diffuse.shape[0], self.batch_size)
-            torch.testing.assert_allclose(normals, self.normals)
-            torch.testing.assert_allclose(diffuse, self.diffuse)
-            torch.testing.assert_allclose(roughness, self.roughness)
-            torch.testing.assert_allclose(specular, self.specular)
-
-        def test_unpack_batch_encoded(self):
-            # TODO: Implement
-            self.assertEqual(1, 1)
-
-    # class TestSvbrdfPacking(unittest.TestCase):
-
-    unittest.main()
+    return view_positions, light_positions, light_intensity

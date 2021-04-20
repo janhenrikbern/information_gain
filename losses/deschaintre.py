@@ -8,6 +8,8 @@ import torch
 import torch.nn as nn
 import utils
 
+from pytorch_svbrdf_renderer import Renderer, Config
+
 
 class SVBRDFL1Loss(nn.Module):
     def forward(self, input, target):
@@ -40,31 +42,26 @@ class SVBRDFL1Loss(nn.Module):
 
 
 class RenderingLoss(nn.Module):
-    def __init__(self, renderer):
+    def __init__(self):
         super(RenderingLoss, self).__init__()
 
-        self.renderer = renderer
+        self.renderer = Renderer()
         self.random_configuration_count = 3
         self.specular_configuration_count = 6
 
     def forward(self, input, target):
-        batch_size = input.shape[0]
+        views_r, lights_r, intenisities_r = utils.generate_random_scenes(self.random_configuration_count)
+        views_s, lights_s, intenisities_s = utils.generate_specular_scenes(self.specular_configuration_count)
 
-        batch_input_renderings = []
-        batch_target_renderings = []
-        for i in range(batch_size):
-            scenes = env.generate_random_scenes(
-                self.random_configuration_count
-            ) + env.generate_specular_scenes(self.specular_configuration_count)
-            input_svbrdf = input[i]
-            target_svbrdf = target[i]
-            input_renderings = []
-            target_renderings = []
-            for scene in scenes:
-                input_renderings.append(self.renderer.render(scene, input_svbrdf))
-                target_renderings.append(self.renderer.render(scene, target_svbrdf))
-            batch_input_renderings.append(torch.cat(input_renderings, dim=0))
-            batch_target_renderings.append(torch.cat(target_renderings, dim=0))
+        config = Config()
+        config.view_position(torch.cat([views_r, views_s], dim=0))
+        config.light_position(torch.cat([lights_r, lights_s], dim=0))
+        config.light_color_intensity(torch.cat([intenisities_r, intenisities_s], dim=0))
+        self.renderer.set_config(config)
+        input_renderings = self.renderer.run(input)
+        target_renderings = self.renderer.run(target)
+        batch_input_renderings = input_renderings.view(input_renderings.shape[0] * input_renderings.shape[1], *input_renderings.shape[2:])
+        batch_target_renderings = target_renderings.view(target_renderings.shape[0] * target_renderings.shape[1], *target_renderings.shape[2:])
 
         epsilon_render = 0.1
         batch_input_renderings_logged = torch.log(
@@ -82,12 +79,12 @@ class RenderingLoss(nn.Module):
 
 
 class MixedLoss(nn.Module):
-    def __init__(self, renderer, l1_weight=0.1):
+    def __init__(self, l1_weight=0.1):
         super(MixedLoss, self).__init__()
 
         self.l1_weight = l1_weight
         self.l1_loss = SVBRDFL1Loss()
-        self.rendering_loss = RenderingLoss(renderer)
+        self.rendering_loss = RenderingLoss()
 
     def forward(self, input, target):
         return self.l1_weight * self.l1_loss(input, target) + self.rendering_loss(
