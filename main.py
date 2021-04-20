@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+from accelerate import Accelerator
 
 from dataset.deschaintre import SvbrdfDataset
 from models import SingleViewModel, MultiViewModel
@@ -49,7 +50,9 @@ if __name__ == "__main__":
     lr = args.learning_rate
     batch_size = args.batch_size
     # device = 'cuda' if torch.cuda.is_available() else 'cpu' 
-    device = 'cpu' if torch.cuda.is_available() else 'cpu' 
+
+    accelerator = Accelerator()
+    # device = 'cpu' if torch.cuda.is_available() else 'cpu' 
 
     dt = SvbrdfDataset(data_dir, 256, "crop", 0, 4, True, mix_materials=False, random_crop=True)
     trainset = torch.utils.data.DataLoader(dt, batch_size=batch_size, pin_memory=False, shuffle=True)
@@ -66,32 +69,32 @@ if __name__ == "__main__":
 
 
     model = MultiViewModel()
-    model.train()
-
     criterion = SVBRDFL1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
+    model, optim, data = accelerator.prepare(model, optimizer, trainset)
+
+    model.train()
     for epoch in range(epoch_start, epoch_start + epochs):
         for i, batch in enumerate(trainset):
             # Unique index of this batch
             batch_index = epoch * 1 + i
             # batch_index = epoch * batch_count + i
-            # Construct inputs
             batch_inputs = batch["inputs"]#.to(device)
             batch_svbrdf = batch["svbrdf"]#.to(device)
 
-            # Perform a step
             optimizer.zero_grad() 
             outputs = model(batch_inputs)
-            loss    = criterion(outputs, batch_svbrdf)
-            loss.backward()
+            loss = criterion(outputs, batch_svbrdf)
+            accelerator.backward(loss)
+            # loss.backward()
             optimizer.step()
 
             print("Epoch {:d}, Batch {:d}, loss: {:f}".format(epoch, i + 1, loss.item()))
 
             # Statistics
             # writer.add_scalar("loss", loss.item(), batch_index)
-            last_batch_inputs = batch_inputs
+            # last_batch_inputs = batch_inputs
 
         # if epoch % args.save_frequency == 0:
         #     Checkpoint.save(checkpoint_dir, args, model, optimizer, epoch)
