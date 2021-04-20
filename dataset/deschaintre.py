@@ -220,7 +220,6 @@ class SvbrdfDataset(torch.utils.data.Dataset):
         )
 
     def render_inputs(self, svbrdf, count):
-        print(">>> Rendering inputs")
         # Constants as defined in the reference code
         min_eps = 0.001  # Reference: "allows near 90     degrees angles"
         max_eps = 0.02  # Reference: "removes all angles below 8.13 degrees."
@@ -246,7 +245,7 @@ class SvbrdfDataset(torch.utils.data.Dataset):
             )
             light_poses = torch.cat([light_poses, light_poses_hemisphere], dim=0)
 
-        light_colors = torch.Tensor([40.0]).unsqueeze(-1)
+        light_colors = torch.Tensor([35.0]).unsqueeze(-1)
         if self.use_augmentation:
             # Reference: "add a normal distribution to the stddev so that sometimes in a minibatch all the images are consistant and sometimes crazy".
             # NOTE: For us, this effect will not be batch-wide but only for this individual sample.

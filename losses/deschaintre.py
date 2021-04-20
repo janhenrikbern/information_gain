@@ -58,17 +58,19 @@ class RenderingLoss(nn.Module):
         config.light_position(torch.cat([lights_r, lights_s], dim=0))
         config.light_color_intensity(torch.cat([intenisities_r, intenisities_s], dim=0))
         self.renderer.set_config(config)
-        input_renderings = self.renderer.run(input)
-        target_renderings = self.renderer.run(target)
+        input_renderings = self.renderer.run(input, stacked_channels=True)
+        target_renderings = self.renderer.run(target, stacked_channels=True)
+        input_renderings = input_renderings.permute(0, 1, 4, 2, 3)
+        target_renderings = target_renderings.permute(0, 1, 4, 2, 3)
         batch_input_renderings = input_renderings.view(input_renderings.shape[0] * input_renderings.shape[1], *input_renderings.shape[2:])
         batch_target_renderings = target_renderings.view(target_renderings.shape[0] * target_renderings.shape[1], *target_renderings.shape[2:])
 
         epsilon_render = 0.1
         batch_input_renderings_logged = torch.log(
-            torch.stack(batch_input_renderings, dim=0) + epsilon_render
+            batch_input_renderings + epsilon_render
         )
         batch_target_renderings_logged = torch.log(
-            torch.stack(batch_target_renderings, dim=0) + epsilon_render
+            batch_target_renderings + epsilon_render
         )
 
         loss = nn.functional.l1_loss(
